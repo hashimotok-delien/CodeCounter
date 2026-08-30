@@ -1,59 +1,48 @@
+"""CodeCounter エントリポイント。
+
+GUI アプリとして起動する。
+コマンドラインから実行した場合 (python main.py <path>) も、
+従来どおり簡易集計を利用できる。
+"""
+
+from __future__ import annotations
+
 import os
 import sys
 
-# 除外するディレクトリ
-EXCLUDE_DIRS = {
-    "__pycache__",
-    ".git",
-    ".venv",
-    "venv",
-    ".env",
-}
+from app.analyzer import analyze_project, format_summary
+from app.gui import main as gui_main
+from app.settings import load_settings
 
-def analyze_python_project(root_dir: str):
-    total_files = 0
-    total_lines = 0
-    total_chars = 0
 
-    for root, dirs, files in os.walk(root_dir):
-        # 除外ディレクトリを walk 対象から外す
-        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
+def cli_analyze(path: str) -> int:
+    """コマンドライン集計（従来の analyze.py 相当）。"""
+    if not os.path.exists(path):
+        print(f"❌ 指定されたパスが存在しません: {path}")
+        return 1
 
-        for file in files:
-            if not file.endswith(".py"):
-                continue
+    settings = load_settings()
+    summary = analyze_project(
+        path,
+        extensions=settings.get("extensions"),
+        exclude_dirs=settings.get("exclude_dirs"),
+        include_hidden=settings.get("include_hidden"),
+    )
+    print(format_summary(summary))
+    return 0
 
-            file_path = os.path.join(root, file)
 
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
+def main() -> int:
+    """エントリポイント。
 
-                total_files += 1
-                total_lines += content.count("\n") + 1 if content else 0
-                total_chars += len(content)
-
-            except Exception as e:
-                print(f"⚠ 読み込み失敗: {file_path} ({e})")
-
-    return total_files, total_lines, total_chars
+    - 引数なし: GUI を起動
+    - 引数あり: 従来の CUI 集計を実行
+    """
+    if len(sys.argv) >= 2:
+        return cli_analyze(sys.argv[1])
+    gui_main()
+    return 0
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("使い方: python analyze.py <project_path>")
-        sys.exit(1)
-
-    project_path = sys.argv[1]
-
-    if not os.path.exists(project_path):
-        print(f"❌ 指定されたパスが存在しません: {project_path}")
-        sys.exit(1)
-
-    files, lines, chars = analyze_python_project(project_path)
-
-    print("📊 Pythonプロジェクト集計結果")
-    print(f"対象　パス: {os.path.abspath(project_path)}")
-    print(f"ファイル数: {files}")
-    print(f"行　　　数: {lines}")
-    print(f"文　字　数: {chars}")
+    sys.exit(main())
