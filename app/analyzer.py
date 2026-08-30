@@ -114,3 +114,51 @@ def format_summary(summary: ProjectSummary) -> str:
     for err in summary.errors:
         lines.append(f"⚠ 読み込み失敗: {err}")
     return "\n".join(lines)
+
+
+def render_template(
+    template: str,
+    summary: ProjectSummary,
+    with_unit: bool = True,
+) -> str:
+    """集計結果テンプレートを展開する。
+
+    利用可能なプレースホルダ:
+        {path}   - 集計対象の絶対パス
+        {files}  - ファイル数（3桁カンマ区切り）
+        {lines}  - 行数（3桁カンマ区切り）
+        {chars}  - 文字数（3桁カンマ区切り）
+        {date}   - 実行日時（YYYY-MM-DD HH:MM:SS）
+
+    引数:
+        template: テンプレート文字列
+        summary: 集計結果
+        with_unit: True ならファイル数・行数・文字数に単位を付ける
+            （例: "8 ファイル"）。False なら数値のみ。
+
+    戻り値:
+        展開済みのテキスト
+    """
+    from datetime import datetime
+
+    if with_unit:
+        files = f"{summary.total_files:,} ファイル"
+        lines = f"{summary.total_lines:,} 行"
+        chars = f"{summary.total_chars:,} 文字"
+    else:
+        files = f"{summary.total_files:,}"
+        lines = f"{summary.total_lines:,}"
+        chars = f"{summary.total_chars:,}"
+
+    values = {
+        "path": summary.root,
+        "files": files,
+        "lines": lines,
+        "chars": chars,
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+    result = template
+    for key, value in values.items():
+        result = result.replace("{" + key + "}", value)
+    return result

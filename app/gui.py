@@ -16,7 +16,11 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from app import __version__ as VERSION
-from app.analyzer import ProjectSummary, analyze_project, format_summary
+from app.analyzer import (
+    ProjectSummary,
+    analyze_project,
+    render_template,
+)
 from app.settings import (
     DEFAULT_SETTINGS,
     ensure_settings_file,
@@ -127,6 +131,12 @@ class CodeCounterApp:
 
         self.settings = ensure_settings_file()
         self.summary: ProjectSummary | None = None
+        self.default_folder = (
+            getattr(sys, "frozen", False)
+            and os.path.dirname(sys.executable)
+            or os.getcwd()
+        )
+        self._restore_last_folder()
 
         self._build_widgets()
         self._check_update_on_startup()
@@ -143,10 +153,7 @@ class CodeCounterApp:
         top = ttk.Frame(main)
         top.pack(fill=tk.X, pady=(0, 6))
         ttk.Label(top, text="対象フォルダ:").pack(side=tk.LEFT)
-        self.folder_var = tk.StringVar(
-            value=getattr(sys, "frozen", False)
-            and os.path.dirname(sys.executable) or os.getcwd()
-        )
+        self.folder_var = tk.StringVar(value=self.default_folder)
         self.folder_entry = ttk.Entry(top, textvariable=self.folder_var)
         self.folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
         ttk.Button(
@@ -269,11 +276,12 @@ class CodeCounterApp:
         """集計結果を UI へ反映する。"""
         self.analyze_button.config(state=tk.NORMAL)
         self.summary = summary
+        self._save_last_folder(summary.root)
         self.status_var.set(
             f"集計完了: {summary.total_files} ファイル, "
             f"{summary.total_lines} 行, {summary.total_chars} 文字"
         )
-        self._set_summary_text(format_summary(summary))
+        self._set_summary_text(self._render_result())
         self.tree.delete(*self.tree.get_children())
         for f in summary.files:
             self.tree.insert(
@@ -292,6 +300,16 @@ class CodeCounterApp:
                 "\n".join(summary.errors[:50]),
             )
 
+    def _render_result(self) -> str:
+        """設定されたテンプレートを展開して集計結果文字列を返す。"""
+        template = self.settings.get(
+            "result_template",
+            DEFAULT_SETTINGS["result_template"],
+        )
+        if self.summary is None:
+            return ""
+        return render_template(template, self.summary)
+
     def _set_summary_text(self, text: str) -> None:
         """集計結果テキストエリアの内容を設定する。"""
         self.summary_text.config(state=tk.NORMAL)
@@ -303,10 +321,28 @@ class CodeCounterApp:
         """集計結果をクリップボードへコピーする。"""
         if self.summary is None:
             return
-        text = format_summary(self.summary)
+        text = self._render_result()
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
         self.status_var.set("集計結果をクリップボードにコピーしました")
+
+    def _restore_last_folder(self) -> None:
+        """前回の集計フォルダを復元する。
+
+        前回フォルダが存在しなければ exe（またはカレント）フォルダを使う。
+        """
+        last = self.settings.get("last_folder", "")
+        if last and os.path.isdir(last):
+            self.default_folder = last
+
+    def _save_last_folder(self, folder: str) -> None:
+        """集計したフォルダを設定へ保存する（次回起動時の復元用）。"""
+        try:
+            self.settings["last_folder"] = folder
+            save_settings(self.settings)
+        except OSError:
+            # 保存に失敗しても集計自体は継続する
+            pass
 
     # ------------------------------------------------------------------
     # 設定ダイアログ
@@ -319,7 +355,7 @@ class CodeCounterApp:
         dialog.title("設定")
         dialog.transient(self.root)
         dialog.grab_set()
-        dialog.geometry("480x330")
+        dialog.geometry("520x560")
 
         pad = ttk.Frame(dialog, padding=12)
         pad.pack(fill=tk.BOTH, expand=True)
@@ -393,12 +429,26 @@ class CodeCounterApp:
             command=lambda _v: _update_font_label(),
         ).pack(side=tk.LEFT, fill=tk.X, expand=True)
 
+        # 集計結果テンプレート
+        ttk.Label(
+            pad,
+            text="集計結果テンプレート（{path}{files}{lines}{chars}{date}）:",
+        ).grid(row=8, column=0, sticky=tk.W, pady=(8, 2))
+        template_text = tk.Text(pad, height=7, wrap=tk.WORD)
+        template_text.grid(row=9, column=0, sticky=tk.W + tk.E, pady=4)
+        template_text.insert(
+            "1.0",
+            current.get(
+                "result_template", DEFAULT_SETTINGS["result_template"]
+            ),
+        )
+
         ttk.Label(
             pad, text="※ 変更は次回起動時に反映されます", foreground="#888"
-        ).grid(row=8, column=0, sticky=tk.W, pady=(2, 4))
+        ).grid(row=10, column=0, sticky=tk.W, pady=(2, 4))
 
         btn = ttk.Frame(pad)
-        btn.grid(row=9, column=0, sticky=tk.E, pady=(8, 0))
+        btn.grid(row=11, column=0, sticky=tk.E, pady=(8, 0))
 
         def on_save() -> None:
             """設定を保存してダイアログを閉じる。"""
@@ -413,6 +463,9 @@ class CodeCounterApp:
                     "update_channel", DEFAULT_SETTINGS["update_channel"]
                 ),
                 "font_scale": round(font_var.get(), 1),
+                "result_template": template_text.get("1.0", tk.END).rstrip(
+                    "\n"
+                ),
             }
             try:
                 save_settings(new_settings)

@@ -41,6 +41,14 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "auto_check_update": True,    # 起動時に更新を確認するか
     "update_channel": "stable",   # 更新チャンネル (stable / prerelease)
     "font_scale": 1.0,            # 文字サイズ倍率（1.0〜2.0）
+    "last_folder": "",            # 前回の集計フォルダ（次回起動時に復元）
+    "result_template": (          # 集計結果の表示・コピー用テンプレート
+        "📊 Pythonプロジェクト集計結果\n"
+        "対象　パス: {path}\n"
+        "ファイル数: {files}\n"
+        "行　　　数: {lines}\n"
+        "文　字　数: {chars}"
+    ),
 }
 
 
