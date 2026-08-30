@@ -16,7 +16,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from app import __version__ as VERSION
-from app.analyzer import ProjectSummary, analyze_project
+from app.analyzer import ProjectSummary, analyze_project, format_summary
 from app.settings import (
     DEFAULT_SETTINGS,
     ensure_settings_file,
@@ -168,14 +168,28 @@ class CodeCounterApp:
             side=tk.LEFT, padx=8, anchor=tk.W
         )
 
-        # サマリー表示
-        self.summary_var = tk.StringVar(value="")
-        ttk.Label(
+        # サマリー表示（コピー可能なテキストエリア + コピーボタン）
+        result_row = ttk.Frame(main)
+        result_row.pack(fill=tk.X, pady=(0, 6))
+        ttk.Label(result_row, text="集計結果:").pack(side=tk.LEFT)
+        copy_button = ttk.Button(
+            result_row, text="コピー", command=self._copy_summary
+        )
+        copy_button.pack(side=tk.LEFT, padx=(6, 0))
+
+        self.summary_text = tk.Text(
             main,
-            textvariable=self.summary_var,
-            font=("", 11, "bold"),
-            anchor=tk.W,
-        ).pack(fill=tk.X, pady=(0, 6))
+            height=5,
+            wrap=tk.NONE,
+            font=("Consolas", 10),
+            state=tk.DISABLED,
+            background="#f5f5f5",
+            relief=tk.SUNKEN,
+            bd=1,
+            padx=6,
+            pady=4,
+        )
+        self.summary_text.pack(fill=tk.X, pady=(0, 6))
 
         # ファイル一覧
         columns = ("path", "lines", "chars")
@@ -218,7 +232,7 @@ class CodeCounterApp:
 
         self.analyze_button.config(state=tk.DISABLED)
         self.status_var.set("集計中...")
-        self.summary_var.set("")
+        self._set_summary_text("")
 
         thread = threading.Thread(
             target=self._analyze_worker, args=(folder,), daemon=True
@@ -259,10 +273,7 @@ class CodeCounterApp:
             f"集計完了: {summary.total_files} ファイル, "
             f"{summary.total_lines} 行, {summary.total_chars} 文字"
         )
-        self.summary_var.set(
-            f"📊 ファイル数: {summary.total_files}  |  "
-            f"行数: {summary.total_lines}  |  文字数: {summary.total_chars}"
-        )
+        self._set_summary_text(format_summary(summary))
         self.tree.delete(*self.tree.get_children())
         for f in summary.files:
             self.tree.insert(
@@ -280,6 +291,22 @@ class CodeCounterApp:
                 "読み込み失敗の詳細",
                 "\n".join(summary.errors[:50]),
             )
+
+    def _set_summary_text(self, text: str) -> None:
+        """集計結果テキストエリアの内容を設定する。"""
+        self.summary_text.config(state=tk.NORMAL)
+        self.summary_text.delete("1.0", tk.END)
+        self.summary_text.insert("1.0", text)
+        self.summary_text.config(state=tk.DISABLED)
+
+    def _copy_summary(self) -> None:
+        """集計結果をクリップボードへコピーする。"""
+        if self.summary is None:
+            return
+        text = format_summary(self.summary)
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        self.status_var.set("集計結果をクリップボードにコピーしました")
 
     # ------------------------------------------------------------------
     # 設定ダイアログ

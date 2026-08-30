@@ -100,13 +100,16 @@ def analyze_project(
 
 
 def format_summary(summary: ProjectSummary) -> str:
-    """集計結果を表示用テキストへ整形する。"""
+    """集計結果を表示用テキストへ整形する（CUI 互換の書式）。
+
+    数値は 3 桁カンマ区切りで、単位（ファイル・行・文字）を付ける。
+    """
     lines = [
-        "📊 CodeCounter 集計結果",
-        f"対象パス: {summary.root}",
-        f"ファイル数: {summary.total_files}",
-        f"行　　数: {summary.total_lines}",
-        f"文字数: {summary.total_chars}",
+        "📊 Pythonプロジェクト集計結果",
+        f"対象　パス: {summary.root}",
+        f"ファイル数: {summary.total_files:,} ファイル",
+        f"行　　　数: {summary.total_lines:,} 行",
+        f"文　字　数: {summary.total_chars:,} 文字",
     ]
     for err in summary.errors:
         lines.append(f"⚠ 読み込み失敗: {err}")
