@@ -43,8 +43,15 @@ python main.py <プロジェクトのパス>
 | `include_hidden` | `false` | 隠しファイルを集計するか |
 | `auto_check_update` | `true` | 起動時にアップデートを確認するか |
 | `update_channel` | `stable` | `stable` か `prerelease` |
+| `font_scale` | `1.0` | 文字サイズ倍率（`1.0`〜`2.0`） |
 
 GUI の「設定...」からも変更できます。
+
+## 4K / 高 DPI ディスプレイ
+
+- 起動時に Windows の DPI（拡大率）を自動検出し、文字サイズ・ウィンドウサイズを連動させます
+- さらに「設定... → 文字サイズ倍率」で手動で拡大（最大 2.0 倍）できます
+- 文字サイズの変更は次回起動時に反映されます
 
 ## exe のビルド
 

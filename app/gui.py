@@ -57,14 +57,72 @@ def set_window_icon(root: tk.Tk) -> None:
         pass
 
 
+def enable_dpi_awareness() -> None:
+    """プロセスを Per-Monitor DPI 認識にする。
+
+    Windows 10 1703+ では SetProcessDpiAwarenessContext を使うと
+    モニター間移動でも正しく拡大される。失敗時は従来 API へフォールバック。
+    """
+    try:
+        from ctypes import windll  # type: ignore[attr-defined]
+
+        try:
+            # Windows 10 1703+ (Per-Monitor V2)
+            windll.user32.SetProcessDpiAwarenessContext(  # type: ignore
+                -4
+            )
+        except Exception:  # noqa: BLE001
+            try:
+                # Windows 8.1+ (Per-Monitor)
+                windll.shcore.SetProcessDpiAwareness(2)  # type: ignore
+            except Exception:  # noqa: BLE001
+                # Windows Vista+ (System DPI aware)
+                windll.user32.SetProcessDPIAware()  # type: ignore
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def get_system_dpi() -> int:
+    """システム DPI（96 が 100%）を返す。取得できない場合は 96。"""
+    try:
+        from ctypes import windll  # type: ignore[attr-defined]
+
+        return int(windll.user32.GetDpiForSystem())  # type: ignore
+    except Exception:  # noqa: BLE001
+        return 96
+
+
+def apply_font_scaling(root: tk.Tk, font_scale: float = 1.0) -> None:
+    """システム DPI と設定の倍率に基づいてフォントを拡大する。
+
+    - tk scaling に実効 DPI を設定すると、ポイント単位のフォントが
+      自動で拡大される（Tk 8.6 標準の仕組み）
+    - font_scale はユーザー設定の追加倍率（1.0 で通常）
+
+    引数:
+        root: ルートウィンドウ
+        font_scale: start ユーザー設定の文字サイズ倍率 (1.0〜2.0)
+    """
+    try:
+        logical_dpi = get_system_dpi()
+        scale = logical_dpi / 72.0 * font_scale
+        root.tk.call("tk", "scaling", scale)
+    except tk.TclError:
+        pass
+
+
 class CodeCounterApp:
     """メイン GUI アプリケーション。"""
 
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title(f"CodeCounter v{VERSION}")
-        self.root.geometry("820x560")
-        self.root.minsize(640, 420)
+        # 4K/高DPI ではウィンドウ自体もスケーリングして確保する
+        dpi_scale = get_system_dpi() / 96.0
+        w = round(820 * dpi_scale)
+        h = round(560 * dpi_scale)
+        self.root.geometry(f"{w}x{h}")
+        self.root.minsize(round(640 * dpi_scale), round(420 * dpi_scale))
         set_window_icon(root)
 
         self.settings = ensure_settings_file()
@@ -234,7 +292,7 @@ class CodeCounterApp:
         dialog.title("設定")
         dialog.transient(self.root)
         dialog.grab_set()
-        dialog.geometry("460x260")
+        dialog.geometry("480x330")
 
         pad = ttk.Frame(dialog, padding=12)
         pad.pack(fill=tk.BOTH, expand=True)
@@ -283,8 +341,37 @@ class CodeCounterApp:
             pad, text="起動時にアップデートを確認する", variable=auto_var
         ).grid(row=5, column=0, sticky=tk.W, pady=4)
 
+        # 文字サイズ
+        font_scale = float(
+            current.get("font_scale", DEFAULT_SETTINGS["font_scale"])
+        )
+        ttk.Label(pad, text="文字サイズ倍率:").grid(
+            row=6, column=0, sticky=tk.W, pady=4
+        )
+        scale_row = ttk.Frame(pad)
+        scale_row.grid(row=7, column=0, sticky=tk.W + tk.E, pady=2)
+        font_var = tk.DoubleVar(value=font_scale)
+        font_label = ttk.Label(scale_row, text=f"{font_scale:.1f}x", width=6)
+        font_label.pack(side=tk.RIGHT)
+
+        def _update_font_label(*_args: object) -> None:
+            font_label.config(text=f"{font_var.get():.1f}x")
+
+        font_var.trace_add("write", _update_font_label)
+        ttk.Scale(
+            scale_row,
+            from_=1.0,
+            to=2.0,
+            variable=font_var,
+            command=lambda _v: _update_font_label(),
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        ttk.Label(
+            pad, text="※ 変更は次回起動時に反映されます", foreground="#888"
+        ).grid(row=8, column=0, sticky=tk.W, pady=(2, 4))
+
         btn = ttk.Frame(pad)
-        btn.grid(row=6, column=0, sticky=tk.E, pady=(8, 0))
+        btn.grid(row=9, column=0, sticky=tk.E, pady=(8, 0))
 
         def on_save() -> None:
             """設定を保存してダイアログを閉じる。"""
@@ -298,6 +385,7 @@ class CodeCounterApp:
                 "update_channel": current.get(
                     "update_channel", DEFAULT_SETTINGS["update_channel"]
                 ),
+                "font_scale": round(font_var.get(), 1),
             }
             try:
                 save_settings(new_settings)
@@ -412,14 +500,15 @@ def _split_csv(text: str) -> list[str]:
 
 def main() -> None:
     """GUI を起動する。"""
+    enable_dpi_awareness()
     root = tk.Tk()
-    # Windows で DPI 設定を明示
-    try:
-        from ctypes import windll  # type: ignore[attr-defined]
+    set_window_icon(root)
 
-        windll.shcore.SetProcessDpiAwareness(1)  # type: ignore[attr-defined]
-    except Exception:  # noqa: BLE001
-        pass
+    settings = ensure_settings_file()
+    font_scale = float(
+        settings.get("font_scale", DEFAULT_SETTINGS["font_scale"])
+    )
+    apply_font_scaling(root, font_scale)
 
     CodeCounterApp(root)
     root.mainloop()

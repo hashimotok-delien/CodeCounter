@@ -40,6 +40,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "include_hidden": False,      # 隠しファイル・隠しディレクトリを含めるか
     "auto_check_update": True,    # 起動時に更新を確認するか
     "update_channel": "stable",   # 更新チャンネル (stable / prerelease)
+    "font_scale": 1.0,            # 文字サイズ倍率（1.0〜2.0）
 }
 
 
