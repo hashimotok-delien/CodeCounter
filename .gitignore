@@ -19,7 +19,9 @@ _test_*.py
 _save_rank_card.py
 
 # CodeCounter ユーザー設定（実行環境ごとに変わるため追跡しない）
-settings.yml
+# user フォルダ内の設定ファイルは除外するが、.gitkeep は管理する
+user/*
+!user/.gitkeep
 
 # icon.png から自動生成されるビルド生成物
 icon.ico

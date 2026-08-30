@@ -1,6 +1,6 @@
 """settings.yml の作成・読み書きを担当するモジュール。
 
-起動時に settings.yml が存在しなければ既定値で自動生成する。
+起動時に user/settings.yml が存在しなければ既定値で自動生成する。
 既定値はコード内の DEFAULT_SETTINGS で管理し、GUI 側で変更・保存できる。
 """
 
@@ -14,10 +14,12 @@ import yaml
 APP_NAME = "CodeCounter"
 
 # 設定ファイルの保存先。
+# アプリ直下の user フォルダ内に settings.yml を配置して管理する。
 # PyInstaller 実行時は sys.executable の場所、通常実行時は
-# カレントディレクトリを基準にする。
+# プロジェクトルートを基準にする。
 CONFIG_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-SETTINGS_PATH = os.path.join(CONFIG_DIR, "settings.yml")
+USER_DIR = os.path.join(CONFIG_DIR, "user")
+SETTINGS_PATH = os.path.join(USER_DIR, "settings.yml")
 
 # 既定の除外ディレクトリ名（サブディレクトリ名が一致したものを除外）
 DEFAULT_EXCLUDE_DIRS_SRC = {
@@ -90,7 +92,13 @@ def load_settings(path: str | None = None) -> dict[str, Any]:
 
 
 def _save_settings(settings: dict[str, Any], path: str) -> None:
-    """設定をYAMLファイルへ書き出す。"""
+    """設定をYAMLファイルへ書き出す。
+
+    保存先ディレクトリが存在しなければ自動作成する。
+    """
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         yaml.safe_dump(
             settings,
@@ -102,5 +110,8 @@ def _save_settings(settings: dict[str, Any], path: str) -> None:
 
 
 def save_settings(settings: dict[str, Any], path: str | None = None) -> None:
-    """設定を保存する（ensure_settings_file 用の公開API）。"""
+    """設定を保存する（ensure_settings_file 用の公開API）。
+
+    保存先の user フォルダが無ければ自動作成する。
+    """
     _save_settings(settings, path or SETTINGS_PATH)
